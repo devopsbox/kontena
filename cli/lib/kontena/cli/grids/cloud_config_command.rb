@@ -33,7 +33,8 @@ module Kontena::Cli::Grids
         peer_interface: peer_interface,
         dns_servers: dns_servers,
         docker_bip: docker_bip,
-        version: version
+        version: version,
+        grid_subnet: grid['subnet'],
       )
       puts config
     end
