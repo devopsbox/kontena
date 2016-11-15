@@ -222,16 +222,20 @@ module Kontena::NetworkAdapters
       async.start(info)
     end
 
-    def on_ipam_start(topic, data)
+    def on_ipam_start(topic, info)
       @ipam_client = IpamClient.new
-      ensure_default_pool
+      ensure_default_pool(info['grid'])
       Celluloid::Notifications.publish('network:ready', nil)
       @ipam_running = true
     end
 
-    def ensure_default_pool()
-      info 'network and ipam ready, ensuring default network existence'
-      @default_pool = @ipam_client.reserve_pool('kontena', '10.81.0.0/16', '10.81.128.0/17')
+    def ensure_default_pool(grid_info)
+      grid_subnet = IPAddr.new(grid_info['subnet'])
+
+      lower, upper = grid_subnet.split
+
+      info "network and ipam ready, ensuring default network with subnet=#{grid_subnet.to_cidr} iprange=#{upper.to_cidr}"
+      @default_pool = @ipam_client.reserve_pool('kontena', grid_subnet.to_cidr, upper.to_cidr)
     end
 
     # @param [Hash] info
@@ -305,10 +309,12 @@ module Kontena::NetworkAdapters
 
     # @param [Hash] info
     def post_start(info)
-      if info['node_number']
-        weave_bridge = "10.81.0.#{info['node_number']}/16"
-        self.exec(['--local', 'expose', "ip:#{weave_bridge}"])
-        info "bridge exposed: #{weave_bridge}"
+      grid_subnet = IPAddr.new(info['grid']['subnet'])
+      overlay_ip = info['overlay_ip']
+      if grid_subnet && overlay_ip
+        weave_cidr = "#{overlay_ip}/#{grid_subnet.prefixlen}"
+        self.exec(['--local', 'expose', "ip:#{weave_cidr}"])
+        info "bridge exposed: #{weave_cidr}"
       end
     end
 
