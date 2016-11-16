@@ -341,6 +341,40 @@ module Kontena::NetworkAdapters
       false
     end
 
+    # Attach container to weave with given CIDR address
+    #
+    # @param [String] container_id
+    # @param [String] overlay_cidr '10.81.X.Y/16'
+    def attach_container(container_id, cidr)
+      info "Attach container=#{container_id} at cidr=#{cidr}"
+
+      self.attach(container_id, cidr)
+    end
+
+    # Attach container to weave with given CIDR address, first detaching any mismatching addresses
+    #
+    # @param [String] container_id
+    # @param [String] overlay_cidr '10.81.X.Y/16'
+    def migrate_container(container_id, cidr)
+      info "Migrate container=#{container_id} to cidr=#{cidr}"
+
+      # first remove any existing addresses
+      # this is required, since weave will not attach if the address already exists, but with a different netmask
+      self.ps(container_id) do |name, mac, *cidrs|
+        debug "Migrate check: name=#{name} with cidrs=#{cidrs}"
+
+        cidrs.each do |attached_cidr|
+          if cidr != attached_cidr
+            warn "Migrate container=#{container_id} from cidr=#{attached_cidr}"
+            self.detach(container_id, attached_cidr)
+          end
+        end
+      end
+
+      # attach with the correct address
+      self.attach_container(container_id, cidr)
+    end
+
     def detach_network(event)
       overlay_cidr = event.Actor.attributes['io.kontena.container.overlay_cidr']
       overlay_network = event.Actor.attributes['io.kontena.container.overlay_network']
