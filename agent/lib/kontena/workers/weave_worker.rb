@@ -21,7 +21,7 @@ module Kontena::Workers
     end
 
     def start
-      sleep 1 until weave_running?
+      sleep 1 until network_adapter.running?
       info 'attaching network to existing containers'
       Docker::Container.all(all: false).each do |container|
         self.weave_attach(container)
@@ -29,7 +29,7 @@ module Kontena::Workers
     end
 
     def on_dns_add(topic, event)
-      sleep 1 until weave_running?
+      sleep 1 until network_adapter.running?
       add_dns(event[:id], event[:ip], event[:name])
     end
 
@@ -37,19 +37,19 @@ module Kontena::Workers
     # @param [Docker::Event] event
     def on_container_event(topic, event)
       if event.status == 'start'
-        sleep 1 until weave_running?
+        sleep 1 until network_adapter.running?
         container = Docker::Container.get(event.id) rescue nil
         if container
           self.weave_attach(container)
         end
       elsif event.status == 'restart'
-        sleep 1 until weave_running?
-        if Actor[:network_adapter].router_image?(event.from)
+        sleep 1 until network_adapter.running?
+        if network_adapter.router_image?(event.from)
           self.start
         end
 
       elsif event.status == 'destroy'
-        Actor[:network_adapter].detach_network(event)
+        network_adapter.detach_network(event)
       end
     end
 
@@ -73,10 +73,6 @@ module Kontena::Workers
     # @param [String] overlay_cidr
     def attach_overlay(container_id, overlay_cidr)
       network_adapter.exec(['--local', 'attach', overlay_cidr, '--rewrite-hosts', container_id])
-    end
-
-    def network_adapter
-      Actor[:network_adapter]
     end
 
     # @param [Docker::Container]
